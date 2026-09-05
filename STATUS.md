@@ -1,6 +1,6 @@
 # Project Status — Badminton Coach App
 
-Last updated: September 4, 2026
+Last updated: September 5, 2026
 
 This is a plain-language status summary for you to check at a glance. For
 the detailed technical version (what changed, why, and how it was
@@ -33,6 +33,25 @@ verified), see `CLAUDE.md`.
 3. **Add your coaches under Settings → Coaches**, if you want more than
    the two demo names. Batches now pick a coach from that list instead of
    typing a name each time.
+
+4. **Finish the deploy steps in `DEPLOY.md`** — you have Tailscale
+   already running, so the app is set up to be reached at
+   `https://venky-hp-zbook-firefly-14-inch-g8-mobile-workstation-pc.tail21ff79.ts.net`
+   (real HTTPS, only reachable from your tailnet, not the public internet).
+   What's left needs `sudo`/crontab, so it's written up for you to run
+   rather than done automatically:
+   - `sudo tailscale set --operator=$USER` once, then
+     `tailscale serve --bg --https=443 / http://127.0.0.1:3001` to turn
+     on the HTTPS front.
+   - Install `deploy/coach-api.service` so the server survives reboots
+     (this also matters for the monthly billing job — see DEPLOY.md).
+   - Schedule `deploy/backup-db.sh` in cron for nightly database backups —
+     right now the only backup is you manually tapping "Export
+     everything" in Settings.
+   - `server/.env`'s `DB_PASSWORD` is still the placeholder `123456` —
+     flagged, deliberately not changed automatically since it needs an
+     `ALTER USER` on your live database at the same moment. Change it
+     when you're at the machine (DEPLOY.md has the exact steps).
 
 ## What's working now
 

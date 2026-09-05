@@ -17,7 +17,7 @@ instructions.
 
 ## Where things stand
 
-Six passes have happened:
+Seven passes have happened:
 
 1. **Review pass** — read the full spec and codebase, found 13 issues
    ranked by severity (security, data loss, financial-integrity, then minor
@@ -73,6 +73,18 @@ Six passes have happened:
    documented (pass 4) as "its own real, synced table" — it was silently
    never syncing to Postgres. Fixed alongside this pass's `coaches`
    addition since both are one-line entries in the same `Set`.
+7. **Deployment-prep pass (this one)** — the user asked to move toward
+   actually deploying this. Checked `README.md`, the spec, `.gitignore`,
+   `server/index.js`, and `vite.config.ts` first rather than assuming; found
+   the repo had no git history at all, `README.md` still described the old
+   real-Supabase setup (contradicting CLAUDE.md's custom-server design),
+   and two real bugs surfaced only by actually starting the server (see
+   below). Asked the user where this should run before writing anything —
+   answer: self-hosted on their own machine, fronted by Tailscale (already
+   installed) rather than a public VPS, keeping the API server off the
+   open internet given its "shared key, not real auth" security model (see
+   "Security / auth" below). See "Deployment setup" below for what changed
+   and what's still a manual (sudo/crontab) step for the user.
 
 Everything below was verified working (typecheck, build, Playwright, and
 for the responsive change, actual screenshots at two widths — and for the
@@ -124,6 +136,83 @@ shared by both sides:
   other. Either give it a fixed, hardcoded id from the start (what we did
   here), or use a natural key / uniqueness constraint the two sides can't
   diverge on.
+
+### Deployment setup (self-hosted + Tailscale)
+Full runbook: `DEPLOY.md`. Summary of what changed and why, plus two real
+bugs that only showed up by actually starting the server rather than just
+reading it — the same lesson as the app_settings bug above, worth
+repeating: **run it, don't just read it.**
+
+- **`server/index.js` now serves the built app itself.** Added
+  `express.static(dist/)` + a SPA fallback (`app.get('*', ...)`, must stay
+  registered *last*, after every `/rest`/`/api` route, or it'd shadow
+  them), gated behind `fs.existsSync(dist/)` so `npm run dev` (Vite's own
+  dev server) is untouched. Production is now one process/one origin —
+  no CORS between app and API, and paired with a single `tailscale serve`
+  HTTPS front, no mixed-content issue either (the thing flagged and
+  deferred back in pass 3).
+- **Found by smoke-testing, not by reading the code**: `import
+  'dotenv/config'` resolves `.env` relative to the *caller's* working
+  directory, not the script's own location. `npm run server` / `npm run
+  dev:all` run `node server/index.js` from the repo root — where there's
+  no `.env` — so `server/.env` was never actually loading that way; it
+  only appeared to work in earlier passes when someone happened to `cd
+  server` first. Would have broken the same way under systemd
+  (`WorkingDirectory` there is the repo root). Fixed by switching to
+  `dotenv`'s `config({ path: ... })` resolved against `__dirname`
+  (`path.join(__dirname, '.env')`), which works regardless of cwd.
+  Verified by starting the server from the repo root and confirming
+  `/health`, an unauthed request (401), and a correctly-authed request
+  (200, against a real reachable Postgres) all behaved correctly — this
+  was *not* caught by typecheck/build, only by actually running it.
+- **`server/.env` had no `API_KEY` set**, while `.env.local` hardcoded
+  `VITE_SUPABASE_ANON_KEY=local-dev-key` — these would not have matched
+  the key the server auto-generates on next start (see the "API key"
+  section under Security/auth), meaning sync would have started failing
+  with 401s the next time the server restarted fresh. Generated a real
+  key, set it explicitly in both places so it's pinned rather than
+  regenerated.
+- **`VITE_SUPABASE_URL`** now points at this machine's Tailscale HTTPS
+  name (`https://venky-hp-zbook-firefly-14-inch-g8-mobile-workstation-pc.tail21ff79.ts.net`)
+  instead of a bare LAN IP over `http://`. `tailscale serve` terminates
+  real TLS (via Tailscale's own cert, `tailscale cert` needs root or
+  `tailscale set --operator=$USER` once — that step is on the user, not
+  run here) and reverse-proxies to the plain-HTTP Node server — this is
+  the actual fix for the deferred mixed-content issue, not a workaround.
+- **`vite.config.ts`'s `basicSsl()` plugin is untouched and stays
+  dev-only** — it only affects `npm run dev`'s local HTTPS; the
+  production build is plain static files with no protocol of their own,
+  served over whatever `tailscale serve` terminates.
+- **This repo had no git history at all until this pass.** Initialized
+  one, made a first commit. Cleaned up before committing: deleted
+  `billing-engine.sql` (a root-level duplicate of `sql/02-billing.sql`
+  that already said "safe to delete" in its own header), and gitignored
+  `playwright-report/`, `Claude outputs/` (scratch screenshots/notes),
+  and `badminton-coach.zip` (a stale early-scaffold export superseded by
+  the real `src/`/`sql/` — left on disk, just not tracked). No remote
+  configured — pushing anywhere is the user's call, not done here.
+- **`deploy/coach-api.service`** (systemd unit) and **`deploy/backup-db.sh`**
+  (nightly `pg_dump`, prunes anything older than 30 days) are written and
+  ready but **not installed/enabled** — both need `sudo` or a crontab
+  edit, which the user runs themselves (see DEPLOY.md for exact
+  commands). The systemd unit matters specifically because monthly
+  billing (`generate_monthly_invoices`) runs off an in-process
+  `node-cron` schedule inside this same process — if it isn't running at
+  06:00 on the 1st, that month waits for the app-open catch-up instead.
+- **`server/.env`'s `DB_PASSWORD=123456`** is placeholder-strength.
+  Flagged, deliberately **not** changed automatically — the user chose
+  "flag only, fix later" since changing it needs a coordinated `ALTER
+  USER` on the live Postgres role at the same time the server's `.env` is
+  updated, and doing that from here risked locking out anything already
+  connected with the old password with no way to verify the fix landed.
+  Revisit when the user is at the machine.
+- **`README.md` was rewritten** — it still described creating a real
+  Supabase project and enabling RLS, which hasn't been true since the
+  custom Express server replaced that design (predates this project
+  memory file). Now matches the actual setup + points at `DEPLOY.md`.
+  Also added the missing root **`.env.example`** it referenced (never
+  existed before, in *any* pass — the setup instructions were
+  unfollowable as written).
 
 ### Batches was unreachable
 `src/screens/Batches.tsx` (create/edit a batch, add or remove players from

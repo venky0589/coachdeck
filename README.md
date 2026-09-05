@@ -1,38 +1,47 @@
-# Coach — Badminton Academy (V1 scaffold)
+# Coach — Badminton Academy
 
-A coach-only, offline-first PWA for a single badminton academy: court-side roster,
-one-tap attendance, and fast fee collection. Calendar-month billing with daily
-proration. Built with React + Vite + TypeScript + Supabase.
+A coach-only, offline-first PWA for running a badminton academy: attendance,
+billing/dues, payments, session packages, holds, and stringing jobs. Built with
+React + Vite + TypeScript, IndexedDB as the local source of truth, and a small
+Express server (`server/index.js`) that mimics enough of the Supabase/PostgREST
+REST surface for `@supabase/supabase-js` to talk to plain Postgres. **This is not
+real Supabase** — see CLAUDE.md's "What this project is" for why, and its
+"Security / auth" section for what that does and doesn't protect against.
 
-This is the **spec-critical foundation** — the parts that are fiddly to get right and
-don't need a live backend to be correct. A coding agent (or you) can build the
-remaining screens on top of these patterns. See "What's here / what's not" below.
-
-## Run it
+## Run it locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-It runs immediately with **no backend** — open the app and tap **Load demo data** on
-the Today screen to populate a batch, players, and open invoices. Attendance and
-payments work fully offline against IndexedDB.
+It runs immediately with **no backend** — open the app and tap **Load demo data**
+on the Today screen to populate batches, players, coaches, and open invoices.
+Attendance and payments work fully offline against IndexedDB.
 
-To connect Supabase:
+To connect the backend:
 
-1. Create a project at supabase.com.
-2. In the SQL editor, run `sql/01-schema.sql` then `sql/02-billing.sql`.
-3. Enable Row Level Security and add per-table policies (there's a note at the bottom
-   of `01-schema.sql`). **Don't skip this — these are minors' records.**
-4. Copy `.env.example` to `.env.local` and fill in your project URL and anon key.
-5. Restart `npm run dev`. The app now syncs.
+1. Create a Postgres database, then run `sql/01-schema.sql`, `sql/02-billing.sql`,
+   then `sql/03-migrations.sql` (idempotent — safe even on a fresh database) against
+   it. **This holds minors' records** — make sure the database itself isn't
+   network-exposed beyond what you intend.
+2. Copy `server/.env.example` to `server/.env` and fill in `DB_PASSWORD` (and set
+   `API_KEY` explicitly rather than letting it auto-generate, once you have more
+   than one place that needs to match it).
+3. Copy `.env.example` to `.env.local`, set `VITE_SUPABASE_URL` to wherever
+   `server/index.js` is reachable and `VITE_SUPABASE_ANON_KEY` to match `API_KEY`.
+4. `npm run dev:all` (starts the Vite dev server + API server together). The app
+   now syncs.
 
-Build for deploy (static PWA — host on Cloudflare Pages / Vercel):
+## Deploying
 
-```bash
-npm run build && npm run preview
-```
+See **`DEPLOY.md`** for the actual deploy setup in use (self-hosted, fronted by
+Tailscale for real HTTPS without exposing anything to the public internet, systemd
+for process supervision, nightly `pg_dump` backups). `npm run build` produces the
+static PWA in `dist/`; `server/index.js` serves it itself in production (one
+process, one origin — see the "static app" section in that file) rather than
+splitting the frontend onto a separate static host like Cloudflare Pages/Vercel,
+which would put the API server back behind a mismatched HTTP/HTTPS origin.
 
 ## How the offline-first layer works
 
@@ -66,20 +75,16 @@ is idempotent and runs both via pg_cron (the 1st) and on app-open
 
 ## What's here / what's not
 
-Here (stable foundation):
-- Full data-access + offline sync layer
-- TypeScript types mirroring the schema (`src/types/db.ts`)
-- Schema + billing SQL
-- PWA config (installable, offline app shell)
-- Two reference screens: **Roll call** (`src/screens/RollCall.tsx`) and
-  **Collect payment** (`src/screens/CollectPayment.tsx`)
-
-Not here (build next, copying the reference patterns):
-- Player CRUD / profile, batch configurator
-- Holds/pause UI, session-package UI, stringing board
-- Dashboard "month-start collection bar", overdue list + WhatsApp reminders
-- Auth screen + coach PIN lock
-- CSV/Excel export (also serves as backup)
+See `CLAUDE.md` for the full history (six passes: review, hardening, PIN +
+responsive + seed data, an app_settings sync bug, wiring up the Batches
+screen, and a real coaches table) and `STATUS.md` for a plain-language
+snapshot of what's working right now. Short version: everything in the
+original spec is built — attendance, billing/dues, payments, session
+packages, holds, stringing jobs, CSV export, a mandatory coach PIN, and a
+coaches roster. What's deliberately *not* built: per-coach login/accounts
+(one PIN gates the whole app; see CLAUDE.md's "Coaches" section for why
+that's not the same feature) and player-side batch assignment (only works
+from the Batches screen's roster editor today).
 
 ## Stack notes
 

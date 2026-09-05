@@ -1,0 +1,37 @@
+# systemd unit for the badminton-coach-helper API server.
+#
+# Why this exists: server/index.js runs the monthly billing job via an
+# in-process node-cron schedule (see the `cron.schedule('0 6 1 * *', ...)`
+# call) — that only fires if the process is actually still running at
+# 06:00 on the 1st. A terminal you close, or a reboot, kills it. This unit
+# keeps it running and restarts it if it crashes.
+#
+# Install (you run this, not Claude — it's a system-level change):
+#   sudo cp deploy/coach-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now coach-api
+#
+# Check it:
+#   systemctl status coach-api
+#   journalctl -u coach-api -f
+#
+# If this repo ever moves to a different path or a different user account,
+# update WorkingDirectory/User/ExecStart below to match, then
+# `sudo systemctl daemon-reload && sudo systemctl restart coach-api`.
+
+[Unit]
+Description=Badminton Coach API server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=venky
+WorkingDirectory=/home/venky/Development-Personal/badminton-coach-helper
+ExecStart=/home/venky/.nvm/versions/node/v20.20.2/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
