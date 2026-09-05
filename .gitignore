@@ -1,0 +1,16 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+scaffold-preview/
+*.tsbuildinfo
+
+# Scratch, not project source
+Claude outputs/
+badminton-coach.zip
+
+# Secrets — never commit these
+.env
+.env.local
+server/.env
+server/.generated-api-key

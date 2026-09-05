@@ -1,0 +1,140 @@
+erDiagram
+    players ||--o{ player_batches : "assigned to"
+    batches ||--o{ player_batches : "contains"
+
+    players ||--o{ attendance_logs : "has"
+    batches ||--o{ attendance_logs : "records"
+
+    batches ||--o{ session_cancellations : "may cancel"
+
+    players ||--o{ monthly_dues : "billed via"
+    players ||--o{ payment_transactions : "pays"
+    monthly_dues ||--o{ payment_transactions : "settled by"
+
+    players ||--o{ credit_ledger : "wallet of"
+    monthly_dues ||--o{ credit_ledger : "consumed by"
+    payment_transactions ||--o{ credit_ledger : "sourced from"
+
+    players ||--o{ session_packages : "buys"
+    session_packages ||--o{ session_package_usage : "drawn down by"
+    attendance_logs ||--o{ session_package_usage : "consumes"
+
+    players ||--o{ holds : "paused by"
+
+    players {
+        uuid id PK
+        text full_name
+        text guardian_phone
+        date date_of_birth
+        date joining_date
+        player_status status "TRIAL/ACTIVE/PAUSED/DROPPED/ALUMNI"
+        billing_type billing_type "MONTHLY/PACKAGE/DROP_IN"
+        numeric monthly_fee
+        text medical_notes
+        text drop_reason
+        timestamptz updated_at
+    }
+
+    batches {
+        uuid id PK
+        text batch_name
+        time start_time
+        time end_time
+        text_arr days_of_week
+        text court_number
+        int max_capacity
+        timestamptz updated_at
+    }
+
+    player_batches {
+        uuid id PK
+        uuid player_id FK
+        uuid batch_id FK
+        boolean is_active
+        timestamptz updated_at
+    }
+
+    attendance_logs {
+        uuid id PK
+        uuid player_id FK
+        uuid batch_id FK
+        date date
+        attendance_status status "PRESENT/ABSENT/LATE/EXCUSED"
+        timestamptz updated_at
+    }
+
+    session_cancellations {
+        uuid id PK
+        uuid batch_id FK
+        date date
+        text reason
+        timestamptz updated_at
+    }
+
+    monthly_dues {
+        uuid id PK
+        uuid player_id FK
+        varchar billing_month "YYYY-MM"
+        numeric base_fee "snapshotted"
+        numeric amount_paid
+        numeric balance_due
+        due_status status "UNPAID/PARTIAL/PAID/WAIVED"
+        timestamptz updated_at
+    }
+
+    payment_transactions {
+        uuid id PK
+        bigint receipt_no "assigned on sync"
+        uuid player_id FK
+        uuid monthly_due_id FK "nullable"
+        numeric amount
+        payment_mode payment_mode "CASH/UPI/BANK_TRANSFER"
+        timestamptz payment_date
+    }
+
+    credit_ledger {
+        uuid id PK
+        uuid player_id FK
+        numeric amount "+add / -consume"
+        numeric balance_after "running"
+        ledger_type type "ADVANCE/OVERPAYMENT/REFUND/ADJUSTMENT/CONSUMED"
+        uuid related_transaction_id FK
+        uuid related_due_id FK
+    }
+
+    session_packages {
+        uuid id PK
+        uuid player_id FK
+        text package_name
+        int total_sessions
+        int sessions_remaining
+        date expiry_date
+        boolean is_active
+        timestamptz updated_at
+    }
+
+    session_package_usage {
+        uuid id PK
+        uuid package_id FK
+        uuid attendance_id FK
+        date used_date
+    }
+
+    holds {
+        uuid id PK
+        uuid player_id FK
+        date start_date
+        date end_date
+        hold_policy billing_policy "FREE_FREEZE/RETAINER"
+        numeric retainer_amount
+        timestamptz updated_at
+    }
+
+    app_settings {
+        uuid id PK
+        text academy_name
+        text proration_mode "DAILY_PRORATE"
+        int grace_day
+        text coach_pin_hash
+        timestamptz updated_at
+    }
