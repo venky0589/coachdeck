@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0f172a" />
+    <!-- iOS Safari ignores the web manifest for install metadata (no
+    beforeinstallprompt support at all — Add to Home Screen is manual, via
+    the Share sheet, on every iOS version). These Apple-specific tags are
+    the only way to get a proper icon and a fullscreen (no browser chrome)
+    launch once someone does add it, instead of a blurry page-screenshot
+    thumbnail and a mini-Safari wrapper. -->
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Coach" />
     <title>Coach</title>
   </head>
   <body>
