@@ -131,8 +131,15 @@ where things run.
 1. Create a new **Web Service** from this repo (Render's blueprint
    `render.yaml` at the repo root pre-fills most of this if you use
    "New from Blueprint" instead).
-2. Build command: `npm install && npm run build`. Start command:
-   `node server/index.js`.
+2. Build command: `npm install && npm --prefix server install && npm run build`.
+   Start command: `node server/index.js`. **The `npm --prefix server
+   install` matters** — `server/` has its own `package.json`
+   (express/cors/pg/node-cron/dotenv), separate from the root one, and
+   nothing installs it otherwise. Found by an actual failed deploy
+   (`ERR_MODULE_NOT_FOUND`), not by reading the code — it only ever
+   worked locally because of a stray, gitignored `server/node_modules`
+   left over from someone once running `npm install` inside `server/`
+   directly.
 3. Set these environment variables in Render's dashboard (Render exposes
    them at build time too, which matters for the `VITE_*` ones — Vite
    inlines them into the built bundle, so they must be set *before* the
