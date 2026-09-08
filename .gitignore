@@ -14,3 +14,4 @@ badminton-coach.zip
 .env.local
 server/.env
 server/.generated-api-key
+.neon

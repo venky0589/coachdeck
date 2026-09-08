@@ -38,6 +38,9 @@ const pool = new Pool({
     database: process.env.DB_NAME ?? 'badminton_coach',
     user: process.env.DB_USER ?? 'postgres',
     password: process.env.DB_PASSWORD,
+    // Neon (and most managed Postgres) refuse plain-TCP connections — needs
+    // real TLS. Off by default since a local/self-hosted Postgres has none.
+    ssl: process.env.DB_SSL === 'true' ? true : false,
 });
 
 // Bind to localhost unless the coach explicitly opts into LAN exposure (needed

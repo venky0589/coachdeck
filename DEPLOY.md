@@ -102,3 +102,78 @@ crontab -e
   match, restart `coach-api`.
 - **No per-coach login** — this deploy doesn't add multi-coach auth (see
   CLAUDE.md's "Coaches — a real roster entity, still not a login").
+
+---
+
+## Alternative: Render (app) + Neon (Postgres) — free tier
+
+Chosen when the goal is $0 hosting without keeping a personal machine on,
+at the cost of Render's free-tier sleep behavior (see the caveat below).
+Same codebase, no architecture change — just different env values and
+where things run.
+
+### 1. Neon — free Postgres
+
+1. Create a project at Neon. Copy the connection details it gives you
+   (host, database, user, password — Neon shows a full connection string;
+   the pieces after `postgres://user:password@host/dbname` map directly).
+2. Run the schema against it with `psql` (or Neon's SQL editor in the
+   dashboard), in order:
+   ```bash
+   psql "postgres://<user>:<password>@<host>/<dbname>?sslmode=require" \
+     -f sql/01-schema.sql -f sql/02-billing.sql -f sql/03-migrations.sql
+   ```
+3. Note the host/user/password/dbname — you'll set these as Render env
+   vars below, not in any file that gets committed.
+
+### 2. Render — app + API
+
+1. Create a new **Web Service** from this repo (Render's blueprint
+   `render.yaml` at the repo root pre-fills most of this if you use
+   "New from Blueprint" instead).
+2. Build command: `npm install && npm run build`. Start command:
+   `node server/index.js`.
+3. Set these environment variables in Render's dashboard (Render exposes
+   them at build time too, which matters for the `VITE_*` ones — Vite
+   inlines them into the built bundle, so they must be set *before* the
+   build runs, not just at runtime):
+   - `HOST=0.0.0.0` — required; the server's default `127.0.0.1` is
+     unreachable from outside the container and Render doesn't set `HOST`
+     itself.
+   - `DB_SSL=true` — Neon refuses plain TCP.
+   - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` — from Neon, step 1.
+     `DB_PORT=5432`.
+   - `API_KEY` — pick a real value yourself (e.g.
+     `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"`).
+   - `ALLOWED_ORIGINS=https://<your-service>.onrender.com` — your own
+     Render URL. Without this, same-origin POST/PUT/DELETE calls the app
+     makes to itself get rejected by the CORS allow-list, which only
+     recognizes localhost/private-LAN origins by default.
+   - `VITE_SUPABASE_URL=https://<your-service>.onrender.com` and
+     `VITE_SUPABASE_ANON_KEY=<same value as API_KEY>` — app and API are
+     one process/one origin here too, same as the Tailscale setup.
+4. Deploy. Check `https://<your-service>.onrender.com/health`, then open
+   the app and confirm PIN setup and sync work.
+
+### 3. Known limitation — free-tier sleep breaks the billing cron
+
+Render's free web services spin down after ~15 minutes of no incoming
+requests, and cold-start on the next request. Two consequences:
+
+- The in-process `node-cron` job (`0 6 1 * *` in `server/index.js`) only
+  fires if the process happens to be awake at 06:00 on the 1st — on a
+  sleeping free instance, it usually won't be.
+- The app-open catch-up (`if (new Date().getDate() === 1) runBilling()`
+  at server start) only helps if *something* wakes the service on the
+  1st — opening the app yourself, or an external request.
+
+Not fixed here — this is inherent to Render's free tier, not a bug in
+this codebase. If it matters, options (your call, not done in this pass):
+- Hit `/api/billing/run-now` yourself from Settings on the 1st.
+- Point a free uptime pinger (e.g. UptimeRobot, cron-job.org) at `/health`
+  every ~10 minutes, which incidentally keeps the service awake and lets
+  the real cron fire — but that's a third-party dependency, worth
+  deciding deliberately rather than wiring up as a drive-by.
+- Move to a host without idle-sleep (Fly.io, a small always-on VM, or the
+  self-hosted+Tailscale setup above) if the monthly cron needs to be
+  reliable without manual intervention.
