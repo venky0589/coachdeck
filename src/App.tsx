@@ -17,6 +17,7 @@ import { runMonthStartCatchUp } from './lib/billing';
 import { installHoldSweepTriggers } from './lib/holds';
 import { getOne } from './lib/data';
 import { getSettings } from './lib/settings';
+import { onDataChange } from './lib/events';
 import type { Player, AppSettings } from './types/db';
 
 type MainTab = 'home' | 'roll' | 'pay' | 'players' | 'settings' | 'string';
@@ -51,6 +52,15 @@ export default function App() {
     // hasn't been through first-run setup yet — that's handled below by
     // rendering PinSetup instead of skipping the lock.
     getSettings().then(setSettings);
+    // A brand-new browser has an empty local app_settings row, so this can
+    // render PinSetup even though a real PIN already exists server-side —
+    // the initial sync (installSyncTriggers, above) pulls it down moments
+    // later, but nothing previously re-checked settings once that finished.
+    // Re-read on every sync/data change so PinSetup flips to PinLock as
+    // soon as the real settings row lands, instead of needing a reload.
+    return onDataChange(() => {
+      getSettings().then(setSettings);
+    });
   }, []);
 
   function switchTab(t: MainTab) {
