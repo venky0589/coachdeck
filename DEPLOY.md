@@ -162,7 +162,7 @@ where things run.
 4. Deploy. Check `https://<your-service>.onrender.com/health`, then open
    the app and confirm PIN setup and sync work.
 
-### 3. Known limitation — free-tier sleep breaks the billing cron
+### 3. Free-tier sleep — mitigated via UptimeRobot
 
 Render's free web services spin down after ~15 minutes of no incoming
 requests, and cold-start on the next request. Two consequences:
@@ -174,13 +174,12 @@ requests, and cold-start on the next request. Two consequences:
   at server start) only helps if *something* wakes the service on the
   1st — opening the app yourself, or an external request.
 
-Not fixed here — this is inherent to Render's free tier, not a bug in
-this codebase. If it matters, options (your call, not done in this pass):
-- Hit `/api/billing/run-now` yourself from Settings on the 1st.
-- Point a free uptime pinger (e.g. UptimeRobot, cron-job.org) at `/health`
-  every ~10 minutes, which incidentally keeps the service awake and lets
-  the real cron fire — but that's a third-party dependency, worth
-  deciding deliberately rather than wiring up as a drive-by.
-- Move to a host without idle-sleep (Fly.io, a small always-on VM, or the
-  self-hosted+Tailscale setup above) if the monthly cron needs to be
-  reliable without manual intervention.
+**Mitigated**: an UptimeRobot monitor is now configured against
+`https://coachdeck.onrender.com/health`, pinging often enough to keep the
+instance from sleeping — which incidentally means the real `node-cron`
+job actually gets to fire at 06:00 on the 1st instead of relying on the
+app-open catch-up. This is a third-party dependency (not this codebase),
+so if that monitor is ever paused/deleted, this limitation comes back —
+worth checking UptimeRobot's dashboard if a month's invoices don't
+generate on schedule. Fallback if that ever happens: hit
+`/api/billing/run-now` yourself from Settings.
